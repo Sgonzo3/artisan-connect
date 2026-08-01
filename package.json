@@ -1,0 +1,30 @@
+{
+  "name": "artisan-connect",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Linq iMessage agent — inbound-first webhook + replies",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "send": "tsx src/send.ts",
+    "subscribe": "tsx src/subscribe.ts",
+    "start:tunnel": "bash scripts/start-tunnel.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sgonzo3/artisan-connect.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@linqapp/sdk": "^0.32.1",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}
