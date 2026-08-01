@@ -75,20 +75,30 @@ fi
 
 echo "==> Public URL: $PUBLIC_URL"
 echo "==> Waiting until tunnel is publicly reachable..."
-for i in {1..60}; do
+TUNNEL_OK=0
+for i in {1..90}; do
   if curl -sf "$PUBLIC_URL/health" >/dev/null; then
+    TUNNEL_OK=1
+    break
+  fi
+  # Some environments cannot resolve *.trycloudflare.com locally even when
+  # the tunnel is registered. Linq can still deliver webhooks via Cloudflare.
+  if grep -q 'Registered tunnel connection' "$LOG_DIR/tunnel.log" \
+    && curl -sf "http://127.0.0.1:$PORT/health" >/dev/null; then
+    echo "==> Public DNS not resolvable here; tunnel is registered and local health is OK"
+    TUNNEL_OK=1
     break
   fi
   sleep 1
 done
 
-if ! curl -sf "$PUBLIC_URL/health" >/dev/null; then
+if [[ "$TUNNEL_OK" != "1" ]]; then
   echo "Tunnel URL never became reachable: $PUBLIC_URL"
   cat "$LOG_DIR/tunnel.log"
   exit 1
 fi
 
-echo "==> Health check OK via tunnel"
+echo "==> Health check OK (tunnel registered)"
 echo "==> Subscribing webhook to $PUBLIC_URL/webhook?version=2026-02-03"
 PUBLIC_WEBHOOK_URL="$PUBLIC_URL" npx tsx src/subscribe.ts
 
