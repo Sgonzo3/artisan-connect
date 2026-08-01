@@ -82,17 +82,41 @@ assert(
   shopChoicePrompt().includes("399,-"),
   "prompt shows fratres haircut price",
 );
+assert(/TOUR/i.test(shopChoicePrompt()), "prompt offers tour");
+
+// Guided tour + service-before-shop
+{
+  let s = newBookingState("+100");
+  let t = handleBookingMessage(s, "hi");
+  assert(t.replies.some((r) => /available shops/i.test(r)), "suggests shops");
+  s = t.state;
+  t = handleBookingMessage(s, "tour");
+  assert(t.replies.some((r) => /Italian Barber/i.test(r)), "tour has italian");
+  assert(t.replies.some((r) => /Fratres/i.test(r)), "tour has fratres");
+  assert(t.replies.some((r) => /Signatur pakke/i.test(r)), "tour lists fratres services");
+  s = t.state;
+  t = handleBookingMessage(s, "haircut");
+  assert(t.state.pendingCompareKey === "haircut", "pending haircut");
+  assert(t.replies.some((r) => /390,-/i.test(r)), "shows italian price");
+  assert(t.replies.some((r) => /399,-/i.test(r)), "shows fratres price");
+  s = t.state;
+  t = handleBookingMessage(s, "2");
+  assert(t.state.shopId === "fratres_vesterbrogade", "picked fratres after service");
+  assert(t.state.services[0]?.id === "frm_haircut", "auto-selected fratres haircut");
+  assert(t.state.step === "collect_datetime", "skip to datetime with pending service");
+}
 
 // Full flow — Italian Barber
 let state = newBookingState("+15551234567");
 let turn = handleBookingMessage(state, "hi");
 assert(turn.state.step === "collect_shop", "ask shop first");
-assert(turn.replies.some((r) => /which shop/i.test(r)), "shop comparison");
+assert(turn.replies.some((r) => /available shops/i.test(r)), "shop suggestion");
 state = turn.state;
 
 turn = handleBookingMessage(state, "1");
 assert(turn.state.shopId === "italian_barber", "picked italian");
 assert(turn.state.step === "collect_services", "services next");
+assert(turn.replies.some((r) => /guide you through/i.test(r)), "guides services");
 state = turn.state;
 
 turn = handleBookingMessage(state, "haircut and beard");

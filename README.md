@@ -9,9 +9,9 @@ Linq iMessage booking agent for two Copenhagen barbershops:
 
 Over iMessage / RCS, the agent:
 
-1. **Asks which shop you prefer**, with a side-by-side price and hours comparison
-2. Asks which services you want (prices + estimated time from that shop’s menu)
-3. Shares opening hours and collects a preferred day/time
+1. **Suggests which shops are available** (Italian Barber + Fratres Vesterbrogade), with sample prices and hours
+2. **Guides you through services** at each shop (`TOUR`, or browse one shop, or name a service to see where it’s offered)
+3. Collects a preferred day/time for the chosen shop
 4. Confirms a summary with you
 5. Drafts a booking message and sends it to `BOOKING_NOTIFY_NUMBER` (default `+16469434074`)
 
@@ -32,8 +32,10 @@ npm run start:tunnel
 
 Then text your Linq number:
 
-- `hi` — start; you’ll see the shop comparison first
-- `1` / `Italian Barber` or `2` / `Fratres` / `Vesterbrogade` — pick a shop
+- `hi` — start; agent suggests available shops
+- `TOUR` — walk through both shops’ full service menus
+- `1` / `Italian Barber` or `2` / `Fratres` / `Vesterbrogade` — book at that shop
+- `haircut` (before picking a shop) — see price/time at each location, then choose
 - `MENU` / `HOURS` / `SHOPS` — price list / opening hours / switch shop
 - e.g. `haircut & beard` → `Friday 14:00` → `YES`
 - `RESTART` — start over

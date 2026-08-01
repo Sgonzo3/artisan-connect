@@ -747,10 +747,10 @@ export function matchShop(text: string): Shop | null {
   return best?.shop ?? null;
 }
 
-/** Side-by-side shop picker: hours + comparable prices/durations. */
+/** Suggest which shops are available, with price/time highlights. */
 export function shopChoicePrompt(): string {
   const lines = [
-    "Which shop do you prefer? Compare price and time:",
+    "Here are the shops I can book for you right now:",
     "",
   ];
 
@@ -759,8 +759,8 @@ export function shopChoicePrompt(): string {
     lines.push(`${i + 1}) ${shop.name}`);
     lines.push(`   ${shop.address}`);
     lines.push(`   Hours: ${shop.hoursSummary}`);
-    lines.push("   Comparable services:");
-    for (const key of COMPARE_ORDER) {
+    lines.push("   Sample prices:");
+    for (const key of COMPARE_ORDER.slice(0, 4)) {
       const s = SERVICES.find((x) => x.shopId === id && x.compareKey === key);
       if (!s) continue;
       lines.push(
@@ -771,12 +771,124 @@ export function shopChoicePrompt(): string {
   });
 
   lines.push(
-    "Reply with 1 or 2, or the shop name (Italian Barber / Fratres / Vesterbrogade).",
+    "I can walk you through the full menu at either shop.",
+  );
+  lines.push(
+    'Reply TOUR to see both menus, 1 or 2 (or the shop name) to book there, or name a service (e.g. "haircut") and I’ll show where it’s available.',
   );
   lines.push(
     "Tip: Italian Barber is usually cheaper; Fratres is open later on Saturdays (until 16:00).",
   );
   return lines.join("\n");
+}
+
+/** Guided walkthrough of a shop's service categories (for iMessage). */
+export function shopServiceGuide(shopId: ShopId): string {
+  const shop = SHOPS[shopId];
+  const available = servicesForShop(shopId);
+  const cats = [...new Set(available.map((s) => s.category))] as ServiceCategory[];
+
+  const lines: string[] = [
+    `Let's look at ${shop.name}:`,
+    shop.address,
+    `Hours: ${shop.hoursSummary}`,
+    "",
+  ];
+
+  for (const cat of cats) {
+    const items = available.filter((x) => x.category === cat);
+    if (items.length === 0) continue;
+    lines.push(`${CATEGORY_LABEL[cat]}:`);
+    for (const s of items) {
+      lines.push(
+        `• ${s.name} — ${formatPrice(s.priceDkk)} (${formatDuration(s.durationMin)})`,
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push(shop.paymentNote);
+  lines.push(
+    `Want to book here? Reply YES or ${shop.shortName}. Or say NEXT for the other shop / SHOPS for the overview.`,
+  );
+  return lines.join("\n");
+}
+
+/** One message per shop for a guided tour of available locations. */
+export function guideThroughAllShops(): string[] {
+  return [
+    "Happy to walk you through what's available at each shop.",
+    ...SHOP_ORDER.map((id) => shopServiceGuide(id)),
+    "Which shop would you like to book — 1) Italian Barber or 2) Fratres Vesterbrogade?",
+  ];
+}
+
+/**
+ * If the customer named a service before picking a shop, show where it’s offered.
+ * Returns null when nothing matched.
+ */
+export function crossShopServiceGuide(text: string): {
+  lines: string;
+  compareKey?: string;
+  byShop: Partial<Record<ShopId, Service>>;
+} | null {
+  const matched = matchServices(text);
+  if (matched.length === 0) return null;
+
+  // Prefer a comparable service when present
+  const withKey = matched.find((s) => s.compareKey);
+  const compareKey = withKey?.compareKey;
+  const byShop: Partial<Record<ShopId, Service>> = {};
+
+  if (compareKey) {
+    for (const id of SHOP_ORDER) {
+      const s = SERVICES.find((x) => x.shopId === id && x.compareKey === compareKey);
+      if (s) byShop[id] = s;
+    }
+  } else {
+    for (const s of matched) {
+      if (!byShop[s.shopId]) byShop[s.shopId] = s;
+    }
+  }
+
+  const label =
+    (compareKey && COMPARE_LABELS[compareKey]) ||
+    Object.values(byShop)[0]?.name ||
+    "that service";
+
+  const lines = [
+    `"${label}" is available at:`,
+    "",
+  ];
+
+  for (const id of SHOP_ORDER) {
+    const s = byShop[id];
+    const shop = SHOPS[id];
+    const n = SHOP_ORDER.indexOf(id) + 1;
+    if (!s) {
+      lines.push(`${n}) ${shop.shortName} — not listed for this service`);
+      continue;
+    }
+    lines.push(
+      `${n}) ${shop.shortName} — ${s.name}: ${formatPrice(s.priceDkk)} (${formatDuration(s.durationMin)})`,
+    );
+    lines.push(`   Hours: ${shop.hoursSummary}`);
+  }
+
+  lines.push("");
+  lines.push(
+    "Which shop should I book that at? Reply 1 or 2 (or the shop name). Reply TOUR to browse full menus.",
+  );
+
+  return { lines: lines.join("\n"), compareKey, byShop };
+}
+
+/** Resolve a pending cross-shop service choice once the shop is picked. */
+export function serviceForShopCompareKey(
+  shopId: ShopId,
+  compareKey: string,
+): Service | undefined {
+  return SERVICES.find((s) => s.shopId === shopId && s.compareKey === compareKey);
 }
 
 export function menuSummary(

@@ -16,6 +16,8 @@ const sessions = new Map<string, BookingState>();
 interface StoredState {
   step: BookingState["step"];
   shopId?: ShopId;
+  browsingShopId?: ShopId;
+  pendingCompareKey?: string;
   serviceIds: string[];
   slotLabel?: string;
   slotStart?: string;
@@ -29,6 +31,9 @@ function isShopId(id: unknown): id is ShopId {
 
 function hydrate(stored: StoredState): BookingState {
   const shopId = isShopId(stored.shopId) ? stored.shopId : undefined;
+  const browsingShopId = isShopId(stored.browsingShopId)
+    ? stored.browsingShopId
+    : undefined;
   const services: Service[] = stored.serviceIds
     .map((id) => findServiceById(id))
     .filter((s): s is Service => Boolean(s))
@@ -36,13 +41,20 @@ function hydrate(stored: StoredState): BookingState {
 
   // Legacy sessions without a shop → ask again
   let step = stored.step;
-  if (!shopId && step !== "welcome" && step !== "collect_shop" && step !== "done") {
+  if (
+    !shopId &&
+    step !== "welcome" &&
+    step !== "collect_shop" &&
+    step !== "done"
+  ) {
     step = "collect_shop";
   }
 
   return {
     step,
     shopId,
+    browsingShopId,
+    pendingCompareKey: stored.pendingCompareKey,
     services,
     slotLabel: stored.slotLabel,
     slotStart: stored.slotStart,
@@ -55,6 +67,8 @@ function serialize(state: BookingState): StoredState {
   return {
     step: state.step,
     shopId: state.shopId,
+    browsingShopId: state.browsingShopId,
+    pendingCompareKey: state.pendingCompareKey,
     serviceIds: state.services.map((s) => s.id),
     slotLabel: state.slotLabel,
     slotStart: state.slotStart,

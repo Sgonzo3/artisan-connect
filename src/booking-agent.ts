@@ -1,13 +1,17 @@
 import {
+  crossShopServiceGuide,
   formatDuration,
   formatPrice,
   formatServiceList,
   getShop,
+  guideThroughAllShops,
   matchServices,
   matchShop,
   menuSummary,
   parseAppointmentSlot,
+  serviceForShopCompareKey,
   shopChoicePrompt,
+  shopServiceGuide,
   shortMenu,
   slotFitsDuration,
   totals,
@@ -26,9 +30,13 @@ export type Step =
 export interface BookingState {
   step: Step;
   shopId?: ShopId;
+  /** After a guided tour, YES books this shop */
+  browsingShopId?: ShopId;
+  /** Service compare key chosen before a shop (e.g. haircut) */
+  pendingCompareKey?: string;
   services: Service[];
   slotLabel?: string;
-  slotStart?: string; // ISO-ish local label storage
+  slotStart?: string;
   customerName?: string;
   customerHandle: string;
 }
@@ -73,6 +81,21 @@ function wantsChangeShop(text: string): boolean {
     /^(change shop|other shop|switch shop|shops?)\b/i.test(text.trim()) ||
     /\b(different shop|another shop|which shop)\b/i.test(text)
   );
+}
+
+function wantsTour(text: string): boolean {
+  return (
+    /^(tour|browse|both|show (me )?both|walk (me )?through|guide)\b/i.test(
+      text.trim(),
+    ) ||
+    /\b(tour|walk me through|show (me )?(both|all) (shops?|menus?)|what('s| is) available)\b/i.test(
+      text,
+    )
+  );
+}
+
+function wantsNextShop(text: string): boolean {
+  return /^(next|other|other shop)\b/i.test(text.trim());
 }
 
 function clarifyCategory(text: string, shopId: ShopId): string | null {
@@ -137,20 +160,58 @@ function buildNotifyDraft(state: BookingState): string {
 
 function startShopSelection(state: BookingState, intro?: string): AgentTurn {
   return {
-    state: { ...state, step: "collect_shop", shopId: undefined, services: [] },
-    replies: [
-      ...(intro ? [intro] : []),
-      shopChoicePrompt(),
-    ],
+    state: {
+      ...state,
+      step: "collect_shop",
+      shopId: undefined,
+      browsingShopId: undefined,
+      pendingCompareKey: undefined,
+      services: [],
+      slotLabel: undefined,
+      slotStart: undefined,
+    },
+    replies: [...(intro ? [intro] : []), shopChoicePrompt()],
   };
 }
 
-function afterShopSelected(state: BookingState, shopId: ShopId): AgentTurn {
+function afterShopSelected(
+  state: BookingState,
+  shopId: ShopId,
+  opts?: { pendingCompareKey?: string },
+): AgentTurn {
   const shop = getShop(shopId);
+  const pendingKey = opts?.pendingCompareKey ?? state.pendingCompareKey;
+  const pendingService = pendingKey
+    ? serviceForShopCompareKey(shopId, pendingKey)
+    : undefined;
+
+  if (pendingService) {
+    const next: BookingState = {
+      ...state,
+      step: "collect_datetime",
+      shopId,
+      browsingShopId: undefined,
+      pendingCompareKey: undefined,
+      services: [pendingService],
+      slotLabel: undefined,
+      slotStart: undefined,
+    };
+    return {
+      state: next,
+      replies: [
+        `Great — I'll book ${pendingService.name} at ${shop.name}.`,
+        servicesSummary([pendingService]),
+        `When would you like to come in?\n${shop.hoursSummary}`,
+      ],
+    };
+  }
+
   const next: BookingState = {
     ...state,
     step: "collect_services",
     shopId,
+    browsingShopId: undefined,
+    pendingCompareKey: undefined,
     services: [],
     slotLabel: undefined,
     slotStart: undefined,
@@ -158,11 +219,22 @@ function afterShopSelected(state: BookingState, shopId: ShopId): AgentTurn {
   return {
     state: next,
     replies: [
-      `Great — booking at ${shop.name}.`,
-      shortMenu(shopId),
-      `Hours: ${shop.hoursSummary}`,
-      "Which service(s) are you looking for?",
+      `Great — let's book at ${shop.name}. I'll guide you through their services.`,
+      shopServiceGuide(shopId),
+      "Name a service from the list above to continue.",
     ],
+  };
+}
+
+function browseShop(state: BookingState, shopId: ShopId): AgentTurn {
+  return {
+    state: {
+      ...state,
+      step: "collect_shop",
+      browsingShopId: shopId,
+      shopId: undefined,
+    },
+    replies: [shopServiceGuide(shopId)],
   };
 }
 
@@ -182,36 +254,130 @@ export function handleBookingMessage(
   }
 
   if (wantsRestart(trimmed)) {
-    return startShopSelection(newBookingState(state.customerHandle), "Starting fresh.");
+    return startShopSelection(
+      newBookingState(state.customerHandle),
+      "Starting fresh — here are the shops I can book.",
+    );
   }
 
   if (wantsChangeShop(trimmed)) {
-    return startShopSelection(state, "Sure — let's pick a shop again.");
+    return startShopSelection(
+      state,
+      "Sure — here are the shops available again.",
+    );
   }
 
-  // ── Shop selection (upfront) ───────────────────────────────────────
+  // ── Shop selection + guided tour ───────────────────────────────────
   if (state.step === "welcome" || state.step === "collect_shop") {
-    const shop = matchShop(trimmed);
-    const greetingOnly =
-      /^(help|hi|hello|hey|ciao|book|booking)\b/i.test(trimmed) &&
-      !shop;
+    const pureGreeting =
+      /^(help|hi|hello|hey|ciao|book|booking)\s*[!.]*$/i.test(trimmed);
 
-    if (shop) {
-      return afterShopSelected(state, shop.id);
+    if (pureGreeting || (state.step === "welcome" && pureGreeting)) {
+      return {
+        state: { ...state, step: "collect_shop" },
+        replies: [
+          "Hi! I can help you book at these available shops — I'll suggest options and walk you through their services.",
+          shopChoicePrompt(),
+        ],
+      };
     }
 
-    const intro =
-      state.step === "welcome" || greetingOnly
-        ? "Hi! I can book you at The Italian Barber or Fratres M Vesterbrogade."
-        : "I didn't catch which shop — pick one based on price and opening hours:";
+    // First message that isn't only a greeting still gets a short intro,
+    // then we handle shop/service/tour below.
+    const withIntro =
+      state.step === "welcome"
+        ? [
+            "Hi! I can help you book at The Italian Barber or Fratres M Vesterbrogade.",
+          ]
+        : [];
+
+    if (state.step === "welcome") {
+      state = { ...state, step: "collect_shop" };
+    }
+
+    if (wantsTour(trimmed)) {
+      return {
+        state: {
+          ...state,
+          step: "collect_shop",
+          browsingShopId: undefined,
+        },
+        replies: [...withIntro, ...guideThroughAllShops()],
+      };
+    }
+
+    // After a single-shop guide, YES books that shop
+    if (state.browsingShopId && isYes(trimmed)) {
+      return afterShopSelected(state, state.browsingShopId);
+    }
+
+    if (state.browsingShopId && wantsNextShop(trimmed)) {
+      const other: ShopId =
+        state.browsingShopId === "italian_barber"
+          ? "fratres_vesterbrogade"
+          : "italian_barber";
+      return browseShop(state, other);
+    }
+
+    // "about 1", "menu at fratres", "services italian" → guide that shop
+    const aboutMatch = trimmed.match(
+      /^(?:about|show|menu|services?|tour)\s+(?:at\s+|for\s+)?(.+)$/i,
+    );
+    if (aboutMatch?.[1]) {
+      const target = matchShop(aboutMatch[1]);
+      if (target) {
+        const turn = browseShop(state, target.id);
+        return withIntro.length
+          ? { ...turn, replies: [...withIntro, ...turn.replies] }
+          : turn;
+      }
+    }
+
+    const shop = matchShop(trimmed);
+    if (shop) {
+      // "tour 1" / "show fratres" without needing the about prefix
+      if (/^(tour|show|menu|services?)\b/i.test(trimmed)) {
+        const turn = browseShop(state, shop.id);
+        return withIntro.length
+          ? { ...turn, replies: [...withIntro, ...turn.replies] }
+          : turn;
+      }
+      const turn = afterShopSelected(state, shop.id, {
+        pendingCompareKey: state.pendingCompareKey,
+      });
+      return withIntro.length
+        ? { ...turn, replies: [...withIntro, ...turn.replies] }
+        : turn;
+    }
+
+    // Named a service before picking a shop → guide across locations
+    const cross = crossShopServiceGuide(trimmed);
+    if (cross) {
+      return {
+        state: {
+          ...state,
+          step: "collect_shop",
+          pendingCompareKey: cross.compareKey,
+          browsingShopId: undefined,
+        },
+        replies: [
+          ...withIntro,
+          "I can book that — here's where it's available and what it costs/takes:",
+          cross.lines,
+        ],
+      };
+    }
 
     return {
       state: { ...state, step: "collect_shop" },
-      replies: [intro, shopChoicePrompt()],
+      replies: [
+        ...withIntro,
+        "I can book these shops and guide you through each menu:",
+        shopChoicePrompt(),
+      ],
     };
   }
 
-  // From here a shop should be selected
   if (!state.shopId) {
     return startShopSelection(state);
   }
@@ -225,13 +391,23 @@ export function handleBookingMessage(
         `${shop.name}: ${shop.hoursSummary}`,
         state.step === "collect_datetime"
           ? "What day and time work for you?"
-          : "Want to pick a service next? (Or reply SHOPS to compare locations.)",
+          : "Want me to guide you through services next? (Or reply SHOPS / TOUR.)",
       ],
     };
   }
 
-  if (wantsMenu(trimmed)) {
-    if (state.shopId === "italian_barber") {
+  if (wantsMenu(trimmed) || wantsTour(trimmed)) {
+    if (state.shopId === "italian_barber" && /^toner$/i.test(trimmed)) {
+      // fall through to category handlers below
+    } else if (wantsTour(trimmed) && !wantsMenu(trimmed)) {
+      return {
+        state: { ...state, step: "collect_services" },
+        replies: [
+          shopServiceGuide(state.shopId),
+          "Name a service to continue, or SHOPS to switch location.",
+        ],
+      };
+    } else if (state.shopId === "italian_barber") {
       return {
         state,
         replies: [
@@ -239,14 +415,15 @@ export function handleBookingMessage(
           "Reply TONER, HIGHLIGHTS, or COLOR for those lists — or name a service to book.",
         ],
       };
+    } else {
+      return {
+        state,
+        replies: [
+          shopServiceGuide(state.shopId),
+          "Name a service to book, or reply SHOPS to switch location.",
+        ],
+      };
     }
-    return {
-      state,
-      replies: [
-        menuSummary(state.shopId),
-        "Name a service to book, or reply SHOPS to switch location.",
-      ],
-    };
   }
 
   if (state.shopId === "italian_barber") {
@@ -277,13 +454,13 @@ export function handleBookingMessage(
     if (/^(book|another|again|new)\b/i.test(trimmed)) {
       return startShopSelection(
         newBookingState(state.customerHandle),
-        "Happy to book another.",
+        "Happy to book another — here are the shops available.",
       );
     }
     return {
       state,
       replies: [
-        "Your request is already sent. Text RESTART to book something else, or HOURS / MENU / SHOPS anytime.",
+        "Your request is already sent. Text RESTART to book something else, or HOURS / MENU / SHOPS / TOUR anytime.",
       ],
     };
   }
@@ -314,7 +491,9 @@ export function handleBookingMessage(
         ],
       };
     }
-    if (/\b(service|cut|beard|change service|klip|skæg|skaeg)\b/i.test(trimmed)) {
+    if (
+      /\b(service|cut|beard|change service|klip|skæg|skaeg)\b/i.test(trimmed)
+    ) {
       return {
         state: {
           ...state,
@@ -323,7 +502,11 @@ export function handleBookingMessage(
           slotLabel: undefined,
           slotStart: undefined,
         },
-        replies: ["Okay, let's re-pick services. What would you like?"],
+        replies: [
+          "Okay, let's re-pick services. Here's what this shop offers:",
+          shortMenu(state.shopId),
+          "Which service would you like?",
+        ],
       };
     }
     return {
@@ -388,11 +571,11 @@ export function handleBookingMessage(
       return {
         state,
         replies: [
-          "I couldn't match a service in that message.",
+          "I couldn't match a service — let me guide you through this shop again.",
           shortMenu(state.shopId),
           state.shopId === "fratres_vesterbrogade"
-            ? 'Try e.g. "klipning", "hår & skæg", or "glat barbering".'
-            : 'Try e.g. "haircut", "beard trim", or "haircut & beard".',
+            ? 'Try e.g. "klipning", "hår & skæg", or "glat barbering". Reply TOUR for the full walkthrough.'
+            : 'Try e.g. "haircut", "beard trim", or "haircut & beard". Reply TOUR for the full walkthrough.',
         ],
       };
     }
@@ -410,7 +593,7 @@ export function handleBookingMessage(
     return {
       state,
       replies: [
-        "Didn't catch a new service. Name another, say DONE to pick a time, MENU, or SHOPS.",
+        "Didn't catch a new service. Name another, say DONE to pick a time, TOUR, MENU, or SHOPS.",
       ],
     };
   }
@@ -437,6 +620,6 @@ export function handleBookingMessage(
 export function greetingIfEmptyHistory(handle: string): AgentTurn {
   return startShopSelection(
     newBookingState(handle),
-    "Hi! I can book you at The Italian Barber or Fratres M Vesterbrogade.",
+    "Hi! I can help you book at these available shops — I'll suggest options and walk you through their services.",
   );
 }
