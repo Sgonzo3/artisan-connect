@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Artisan Connect — book Copenhagen barbers by text. Compare shops, pick a service, confirm a time."
+    />
+    <title>Artisan Connect</title>
+    <script>
+      // Project Pages URLs without a trailing slash break relative assets.
+      if (
+        !location.pathname.endsWith("/") &&
+        !/\.html?$/i.test(location.pathname)
+      ) {
+        location.replace(
+          location.pathname + "/" + location.search + location.hash,
+        );
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Outfit:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true">
+      <div class="atmosphere__photo"></div>
+      <div class="atmosphere__veil"></div>
+      <div class="atmosphere__grain"></div>
+    </div>
+
+    <header class="top">
+      <a class="brand" href="#top">Artisan Connect</a>
+      <a class="top__text" data-sms-link href="#">Text to book</a>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <p class="hero__brand">Artisan Connect</p>
+        <h1 class="hero__title">Book a barber by text.</h1>
+        <p class="hero__lede">
+          Compare Copenhagen shops, pick a service, and confirm a time —
+          all in Messages.
+        </p>
+        <a class="cta" data-sms-link href="#">
+          <span class="cta__label">Text to book</span>
+          <span class="cta__number">+1 (415) 568-0726</span>
+        </a>
+      </section>
+
+      <section class="section" id="how">
+        <h2 class="section__title">How it works</h2>
+        <p class="section__lede">
+          Text the Artisan Connect number. The booking agent guides you from
+          shop choice to confirmation.
+        </p>
+        <ol class="steps">
+          <li>
+            <span class="steps__n">01</span>
+            <div>
+              <h3>Start the chat</h3>
+              <p>Send a message to open the conversation. Say hi to begin.</p>
+            </div>
+          </li>
+          <li>
+            <span class="steps__n">02</span>
+            <div>
+              <h3>Choose a shop</h3>
+              <p>
+                See available locations with sample prices and hours, or ask for
+                a full tour of each menu.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="steps__n">03</span>
+            <div>
+              <h3>Pick services &amp; time</h3>
+              <p>
+                Name what you want — haircut, beard, packages — then choose a
+                day and time that fits.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="steps__n">04</span>
+            <div>
+              <h3>Confirm</h3>
+              <p>
+                Review the summary and reply YES. A booking draft is sent for
+                the shop to confirm.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section" id="shops">
+        <h2 class="section__title">Shops you can book</h2>
+        <p class="section__lede">
+          Two Copenhagen barbershops, side by side on price and time.
+        </p>
+
+        <div class="shops">
+          <article class="shop">
+            <h3 class="shop__name">The Italian Barber</h3>
+            <p class="shop__meta">Knabrostræde 8A · København K</p>
+            <p class="shop__hours">Mon–Fri 9–18 · Sat 9–14 · Sun closed</p>
+            <ul class="shop__prices">
+              <li><span>Haircut</span><span>390,- · ~30 min</span></li>
+              <li><span>Beard trim</span><span>230,- · ~30 min</span></li>
+              <li><span>Haircut &amp; beard</span><span>520,- · ~1 hr</span></li>
+            </ul>
+            <p class="shop__note">Usually the better price. Also toner, highlights, color.</p>
+          </article>
+
+          <article class="shop">
+            <h3 class="shop__name">Fratres M Vesterbrogade</h3>
+            <p class="shop__meta">Vesterbrogade 30 · København V</p>
+            <p class="shop__hours">Mon 10–18 · Tue–Fri 9–18 · Sat 9–16 · Sun closed</p>
+            <ul class="shop__prices">
+              <li><span>Klipning uden vask</span><span>399,- · ~45 min</span></li>
+              <li><span>Trimming af skæg</span><span>369,- · ~30 min</span></li>
+              <li><span>Hår &amp; skæg</span><span>699,- · ~75 min</span></li>
+            </ul>
+            <p class="shop__note">Open later on Saturdays. Packages, facial, signature cut.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--close" id="start">
+        <h2 class="section__title">Ready when you are</h2>
+        <p class="section__lede">
+          Open Messages, text the number, and the agent will suggest shops and
+          walk you through their services.
+        </p>
+        <a class="cta cta--secondary" data-sms-link href="#">
+          <span class="cta__label">Start a chat</span>
+          <span class="cta__number">+1 (415) 568-0726</span>
+        </a>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p class="foot__brand">Artisan Connect</p>
+      <p class="foot__copy">Book Copenhagen barbers over iMessage &amp; RCS.</p>
+    </footer>
+
+    <script src="main.js"></script>
+  </body>
+</html>
