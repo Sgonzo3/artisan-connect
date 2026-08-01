@@ -42,12 +42,22 @@ Then text your Linq number:
 
 ## Landing site
 
-Minimal static site in `site/` (Tomo-style CTA, warm styling):
+Minimal static site in `site/` (Tomo-style CTA, warm styling).
+
+### Local
 
 ```bash
-npx --yes serve site
-# open the URL, then "Text to book" → Messages with hi to +1 (415) 568-0726
+npm run site
+# open http://localhost:5173 — "Text to book" → Messages with hi to +1 (415) 568-0726
 ```
+
+### GitHub Pages
+
+Workflow: `.github/workflows/pages.yml` deploys `site/` via GitHub Actions.
+
+1. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. Merge to `main` (or re-run the **Deploy GitHub Pages** workflow)
+3. Site URL: https://sgonzo3.github.io/artisan-connect/
 
 ## Scripts
 

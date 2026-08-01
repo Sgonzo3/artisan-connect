@@ -8,6 +8,17 @@
       content="Artisan Connect — book Copenhagen barbers by text. Compare shops, pick a service, confirm a time."
     />
     <title>Artisan Connect</title>
+    <script>
+      // Project Pages URLs without a trailing slash break relative assets.
+      if (
+        !location.pathname.endsWith("/") &&
+        !/\.html?$/i.test(location.pathname)
+      ) {
+        location.replace(
+          location.pathname + "/" + location.search + location.hash,
+        );
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
