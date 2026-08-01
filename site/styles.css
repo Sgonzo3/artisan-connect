@@ -165,9 +165,10 @@ main {
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  padding: clamp(5rem, 12vh, 7.5rem) 0 var(--space-7);
+  /* Match the pill header’s inner left padding so brand lines up */
+  padding: clamp(5rem, 12vh, 7.5rem) 0 var(--space-7) 1.25rem;
   color: var(--paper-2);
-  max-width: 38rem;
+  max-width: 39.25rem;
 }
 
 .hero__brand {
