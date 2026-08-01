@@ -40,6 +40,15 @@ Then text your Linq number:
 - e.g. `haircut & beard` → `Friday 14:00` → `YES`
 - `RESTART` — start over
 
+## Landing site
+
+Minimal static site in `site/` (Tomo-style CTA, warm styling):
+
+```bash
+npx --yes serve site
+# open the URL, then "Text to book" → Messages with hi to +1 (415) 568-0726
+```
+
 ## Scripts
 
 | Command | Purpose |
@@ -49,6 +58,7 @@ Then text your Linq number:
 | `npm run subscribe -- <https-url>` | Register webhook |
 | `npm run send -- <+E.164> [msg]` | Optional outbound after inbound |
 | `npx tsx scripts/smoke-booking.ts` | Offline booking-flow smoke test |
+| `npm run site` | Serve the static landing page |
 
 ## Shop data
 

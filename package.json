@@ -9,7 +9,8 @@
     "send": "tsx src/send.ts",
     "subscribe": "tsx src/subscribe.ts",
     "start:tunnel": "bash scripts/start-tunnel.sh",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "site": "npx --yes serve site -l 5173"
   },
   "repository": {
     "type": "git",
