@@ -53,11 +53,15 @@ npm run site
 
 ### GitHub Pages
 
-Workflow: `.github/workflows/pages.yml` deploys `site/` via GitHub Actions.
+`site/` is published to the `gh-pages` branch (workflow: `.github/workflows/pages.yml`).
 
-1. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**
-2. Merge to `main` (or re-run the **Deploy GitHub Pages** workflow)
-3. Site URL: https://sgonzo3.github.io/artisan-connect/
+**One-time enable** (repo admin):
+
+1. Open [Settings → Pages](https://github.com/Sgonzo3/artisan-connect/settings/pages)
+2. **Build and deployment → Source:** Deploy from a branch
+3. **Branch:** `gh-pages` / `/ (root)` → Save
+
+Live URL: https://sgonzo3.github.io/artisan-connect/
 
 ## Scripts
 
