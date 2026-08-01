@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { BookingState } from "./booking-agent.js";
-import { SERVICES, type Service } from "./catalog.js";
+import {
+  findServiceById,
+  type Service,
+  type ShopId,
+  SHOPS,
+} from "./catalog.js";
 
 const STORE = path.resolve(".booking-sessions.json");
 
@@ -10,6 +15,7 @@ const sessions = new Map<string, BookingState>();
 
 interface StoredState {
   step: BookingState["step"];
+  shopId?: ShopId;
   serviceIds: string[];
   slotLabel?: string;
   slotStart?: string;
@@ -17,12 +23,26 @@ interface StoredState {
   customerHandle: string;
 }
 
+function isShopId(id: unknown): id is ShopId {
+  return typeof id === "string" && id in SHOPS;
+}
+
 function hydrate(stored: StoredState): BookingState {
+  const shopId = isShopId(stored.shopId) ? stored.shopId : undefined;
   const services: Service[] = stored.serviceIds
-    .map((id) => SERVICES.find((s) => s.id === id))
-    .filter((s): s is Service => Boolean(s));
+    .map((id) => findServiceById(id))
+    .filter((s): s is Service => Boolean(s))
+    .filter((s) => !shopId || s.shopId === shopId);
+
+  // Legacy sessions without a shop → ask again
+  let step = stored.step;
+  if (!shopId && step !== "welcome" && step !== "collect_shop" && step !== "done") {
+    step = "collect_shop";
+  }
+
   return {
-    step: stored.step,
+    step,
+    shopId,
     services,
     slotLabel: stored.slotLabel,
     slotStart: stored.slotStart,
@@ -34,6 +54,7 @@ function hydrate(stored: StoredState): BookingState {
 function serialize(state: BookingState): StoredState {
   return {
     step: state.step,
+    shopId: state.shopId,
     serviceIds: state.services.map((s) => s.id),
     slotLabel: state.slotLabel,
     slotStart: state.slotStart,

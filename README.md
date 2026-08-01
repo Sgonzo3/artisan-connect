@@ -1,15 +1,19 @@
 # artisan-connect
 
-Linq iMessage booking agent for [The Italian Barber](https://theitalianbarber.dk/) (Copenhagen).
+Linq iMessage booking agent for two Copenhagen barbershops:
+
+- [The Italian Barber](https://theitalianbarber.dk/) (Knabrostræde)
+- [Fratres M Vesterbrogade](https://fratresm.dk/vesterbrogade/priser/)
 
 ## What it does
 
 Over iMessage / RCS, the agent:
 
-1. Asks which services you want (prices + estimated time from the shop menu)
-2. Shares opening hours and collects a preferred day/time
-3. Confirms a summary with you
-4. Drafts a booking message and sends it to `BOOKING_NOTIFY_NUMBER` (default `+16469434074`)
+1. **Asks which shop you prefer**, with a side-by-side price and hours comparison
+2. Asks which services you want (prices + estimated time from that shop’s menu)
+3. Shares opening hours and collects a preferred day/time
+4. Confirms a summary with you
+5. Drafts a booking message and sends it to `BOOKING_NOTIFY_NUMBER` (default `+16469434074`)
 
 ## Sandbox rules
 
@@ -28,8 +32,9 @@ npm run start:tunnel
 
 Then text your Linq number:
 
-- `hi` — start booking
-- `MENU` / `HOURS` — price list / opening hours
+- `hi` — start; you’ll see the shop comparison first
+- `1` / `Italian Barber` or `2` / `Fratres` / `Vesterbrogade` — pick a shop
+- `MENU` / `HOURS` / `SHOPS` — price list / opening hours / switch shop
 - e.g. `haircut & beard` → `Friday 14:00` → `YES`
 - `RESTART` — start over
 
@@ -45,4 +50,7 @@ Then text your Linq number:
 
 ## Shop data
 
-Menu, durations, and hours are encoded from https://theitalianbarber.dk/ in `src/catalog.ts`.
+Menus, durations, and hours live in `src/catalog.ts`:
+
+- Italian Barber — https://theitalianbarber.dk/
+- Fratres M Vesterbrogade — https://fratresm.dk/vesterbrogade/priser/
