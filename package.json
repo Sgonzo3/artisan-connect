@@ -10,7 +10,8 @@
     "subscribe": "tsx src/subscribe.ts",
     "start:tunnel": "bash scripts/start-tunnel.sh",
     "typecheck": "tsc --noEmit",
-    "site": "npx --yes serve site -l 5173"
+    "site": "npx --yes serve site -l 5173",
+    "contact-card": "tsx scripts/update-contact-card.ts"
   },
   "repository": {
     "type": "git",

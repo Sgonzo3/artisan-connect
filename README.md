@@ -73,6 +73,7 @@ Live URL: https://sgonzo3.github.io/artisan-connect/
 | `npm run send -- <+E.164> [msg]` | Optional outbound after inbound |
 | `npx tsx scripts/smoke-booking.ts` | Offline booking-flow smoke test |
 | `npm run site` | Serve the static landing page |
+| `npm run contact-card` | Create/update Linq iMessage contact card |
 
 ## Shop data
 
