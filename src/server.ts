@@ -6,7 +6,10 @@ import {
   isOptOut,
 } from "./linq.js";
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number.parseInt(process.env.PORT || "3000", 10);
+if (!Number.isFinite(PORT) || PORT <= 0 || PORT >= 65536) {
+  throw new Error(`Invalid PORT: ${process.env.PORT}`);
+}
 const optedOut = new Set<string>();
 const seenEvents = new Set<string>();
 
