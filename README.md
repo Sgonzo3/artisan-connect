@@ -1,59 +1,48 @@
 # artisan-connect
 
-Minimal Linq iMessage agent for the [sandbox](https://dashboard.linqapp.com/sandbox-signup).
+Linq iMessage booking agent for [The Italian Barber](https://theitalianbarber.dk/) (Copenhagen).
 
 ## What it does
 
-1. Exposes `POST /webhook` for `message.received` events
-2. Subscribes that URL via `POST /v3/webhook-subscriptions`
-3. Replies with `POST /v3/chats/{chat_id}/messages`
-4. Optional: `npm run send` creates a chat via `POST /v3/chats` (text-only first message)
+Over iMessage / RCS, the agent:
 
-## Sandbox rules baked in
+1. Asks which services you want (prices + estimated time from the shop menu)
+2. Shares opening hours and collects a preferred day/time
+3. Confirms a summary with you
+4. Drafts a booking message and sends it to `BOOKING_NOTIFY_NUMBER` (default `+16469434074`)
 
-- **Inbound-first** — text your Linq number before the agent messages you
-- **No links on first outbound** — first message is plain text; optional link follow-up with `SEND_FOLLOWUP_LINK=1`
-- Opt-out keywords (`STOP`, etc.) stop further replies for that chat
+## Sandbox rules
+
+- **Inbound-first** — text the Linq number before the agent can message you
+- First outbound has no links / reply_to / effects
+- Opt-out keywords (`STOP`, etc.) stop further replies
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# Edit .env:
-#   LINQ_API_KEY=...
-#   LINQ_PHONE_NUMBER=+1...
+# LINQ_API_KEY, LINQ_PHONE_NUMBER, optional BOOKING_NOTIFY_NUMBER
 npm install
-```
-
-### One-shot (server + public tunnel + webhook subscribe)
-
-```bash
 npm run start:tunnel
 ```
 
-Then text your Linq number from your phone. The agent replies automatically.
+Then text your Linq number:
 
-### Manual
+- `hi` — start booking
+- `MENU` / `HOURS` — price list / opening hours
+- e.g. `haircut & beard` → `Friday 14:00` → `YES`
+- `RESTART` — start over
 
-```bash
-# Terminal 1 — local server
-npm run dev
+## Scripts
 
-# Terminal 2 — public HTTPS tunnel
-cloudflared tunnel --url http://localhost:3000
+| Command | Purpose |
+| --- | --- |
+| `npm run start:tunnel` | Server + Cloudflare tunnel + webhook subscribe |
+| `npm run dev` | Local webhook server only |
+| `npm run subscribe -- <https-url>` | Register webhook |
+| `npm run send -- <+E.164> [msg]` | Optional outbound after inbound |
+| `npx tsx scripts/smoke-booking.ts` | Offline booking-flow smoke test |
 
-# Terminal 3 — subscribe (use the trycloudflare.com URL)
-npm run subscribe -- https://xxxx.trycloudflare.com
-# restart npm run dev so it picks up LINQ_WEBHOOK_SECRET
-```
+## Shop data
 
-### Optional outbound after they've texted you
-
-```bash
-npm run send -- +15551234567 "Hello from my agent!"
-```
-
-## Docs
-
-- [Quickstart](https://docs.linqapp.com/getting-started/quickstart/)
-- [Webhooks](https://docs.linqapp.com/guides/webhooks/)
+Menu, durations, and hours are encoded from https://theitalianbarber.dk/ in `src/catalog.ts`.

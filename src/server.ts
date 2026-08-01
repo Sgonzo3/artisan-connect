@@ -1,21 +1,32 @@
 import express from "express";
 import {
+  greetingIfEmptyHistory,
+  handleBookingMessage,
+  newBookingState,
+} from "./booking-agent.js";
+import {
   createLinqClient,
   extractText,
   getLinqPhoneNumber,
   isOptOut,
 } from "./linq.js";
+import { getSession, saveSession } from "./sessions.js";
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 if (!Number.isFinite(PORT) || PORT <= 0 || PORT >= 65536) {
   throw new Error(`Invalid PORT: ${process.env.PORT}`);
 }
+
+/** Number that receives drafted booking summaries (E.164). */
+const BOOKING_NOTIFY_NUMBER = (
+  process.env.BOOKING_NOTIFY_NUMBER || "+16469434074"
+).replace(/[^\d+]/g, "");
+
 const optedOut = new Set<string>();
 const seenEvents = new Set<string>();
 
 const app = express();
 
-// Keep the raw body for Standard Webhooks signature verification.
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -27,17 +38,67 @@ app.use(
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
+    agent: "italian-barber-booking",
     linq_number: process.env.LINQ_PHONE_NUMBER || null,
-    hint: "Text this Linq number first (inbound-first sandbox). The agent will reply.",
+    notify_number: BOOKING_NOTIFY_NUMBER,
+    hint: "Text the Linq number to book a haircut at The Italian Barber.",
   });
 });
+
+async function sendText(
+  client: ReturnType<typeof createLinqClient>,
+  chatId: string,
+  value: string,
+): Promise<void> {
+  // Keep iMessage chunks reasonably short
+  const chunks: string[] = [];
+  const max = 1200;
+  if (value.length <= max) {
+    chunks.push(value);
+  } else {
+    let rest = value;
+    while (rest.length > 0) {
+      if (rest.length <= max) {
+        chunks.push(rest);
+        break;
+      }
+      let cut = rest.lastIndexOf("\n", max);
+      if (cut < max * 0.5) cut = max;
+      chunks.push(rest.slice(0, cut));
+      rest = rest.slice(cut).replace(/^\n+/, "");
+    }
+  }
+
+  for (const part of chunks) {
+    await client.chats.messages.send(chatId, {
+      message: { parts: [{ type: "text", value: part }] },
+    });
+  }
+}
+
+async function sendBookingNotify(
+  client: ReturnType<typeof createLinqClient>,
+  draft: string,
+): Promise<void> {
+  const from = getLinqPhoneNumber();
+  // Reuses existing chat when the notify number has already texted (sandbox inbound-first).
+  const chat = await client.chats.create({
+    from,
+    to: [BOOKING_NOTIFY_NUMBER],
+    message: {
+      parts: [{ type: "text", value: draft }],
+    },
+  });
+  console.log(
+    `[notify] booking draft sent to ${BOOKING_NOTIFY_NUMBER} chat=${(chat as { id?: string }).id ?? "?"}`,
+  );
+}
 
 app.post("/webhook", async (req, res) => {
   const rawBody =
     (req as express.Request & { rawBody?: string }).rawBody ??
     JSON.stringify(req.body);
 
-  // Always ack quickly so Linq does not retry on our processing time.
   res.status(200).json({ received: true });
 
   try {
@@ -52,7 +113,6 @@ app.post("/webhook", async (req, res) => {
     if (process.env.LINQ_WEBHOOK_SECRET?.trim()) {
       event = client.webhooks.unwrap(rawBody, { headers });
     } else {
-      // Dev fallback before subscribe writes the signing secret into .env
       event = JSON.parse(rawBody);
       console.warn(
         "[webhook] LINQ_WEBHOOK_SECRET not set — skipping signature verification",
@@ -72,7 +132,6 @@ app.post("/webhook", async (req, res) => {
     }
 
     console.log(`[webhook] ${eventType}`, eventId ?? "");
-
     if (eventType !== "message.received") return;
 
     const data = event.data as {
@@ -93,8 +152,7 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
-    const health = data.chat?.health_status?.status;
-    if (health === "OPTED_OUT") {
+    if (data.chat?.health_status?.status === "OPTED_OUT") {
       console.log(`[webhook] chat ${chatId} is OPTED_OUT — not replying`);
       return;
     }
@@ -106,40 +164,61 @@ app.post("/webhook", async (req, res) => {
     if (isOptOut(text)) {
       optedOut.add(chatId);
       console.log(`[opt-out] ${fromHandle} / chat ${chatId}`);
+      await sendText(
+        client,
+        chatId,
+        "You're opted out — we won't message further. Text START if you want booking help again.",
+      );
       return;
     }
 
     if (optedOut.has(chatId)) {
-      console.log(`[webhook] chat ${chatId} locally opted out — not replying`);
-      return;
+      if (/^(START|OPTIN|UNSTOP)$/.test(text.trim())) {
+        optedOut.delete(chatId);
+      } else {
+        console.log(`[webhook] chat ${chatId} locally opted out — not replying`);
+        return;
+      }
     }
 
-    const reply = text
-      ? `Hello from my agent! You said: "${text.slice(0, 200)}"`
-      : "Hello from my agent! Thanks for texting — I'm listening.";
+    let state = getSession(chatId);
+    let turn;
+    if (!state) {
+      if (!text || /^(hi|hello|hey|ciao|help|book|booking)\b/i.test(text)) {
+        turn = greetingIfEmptyHistory(fromHandle);
+      } else {
+        state = newBookingState(fromHandle);
+        turn = handleBookingMessage(state, text);
+      }
+    } else {
+      turn = handleBookingMessage(state, text || "");
+    }
 
-    // Reply on the existing chat (no links / effects / reply_to on first outbound).
-    const sent = await client.chats.messages.send(chatId, {
-      message: {
-        parts: [{ type: "text", value: reply }],
-      },
-    });
+    saveSession(chatId, turn.state);
 
-    console.log(`[outbound] replied in chat ${chatId}`, sent);
+    for (const reply of turn.replies) {
+      await sendText(client, chatId, reply);
+      console.log(`[outbound] → ${fromHandle}: ${reply.slice(0, 120).replace(/\n/g, " ")}…`);
+    }
 
-    // Optional follow-up with a link once the chat already has an outbound message.
-    if (process.env.SEND_FOLLOWUP_LINK === "1") {
-      await client.chats.messages.send(chatId, {
-        message: {
-          parts: [
-            {
-              type: "text",
-              value: "Docs: https://docs.linqapp.com/getting-started/quickstart/",
-            },
-          ],
-        },
-      });
-      console.log(`[outbound] follow-up link sent in chat ${chatId}`);
+    if (turn.notifyDraft) {
+      try {
+        // If the customer IS the notify number, they already got the draft in-thread.
+        if (fromHandle.replace(/[^\d+]/g, "") !== BOOKING_NOTIFY_NUMBER) {
+          await sendBookingNotify(client, turn.notifyDraft);
+        } else {
+          console.log(
+            "[notify] customer is notify number — draft already sent in-thread",
+          );
+        }
+      } catch (err) {
+        console.error("[notify] failed to send booking draft", err);
+        await sendText(
+          client,
+          chatId,
+          "I saved your details, but couldn't relay the draft to the shop line. We'll follow up manually.",
+        );
+      }
     }
   } catch (err) {
     console.error("[webhook] handler error", err);
@@ -148,13 +227,8 @@ app.post("/webhook", async (req, res) => {
 
 app.listen(PORT, () => {
   const number = process.env.LINQ_PHONE_NUMBER || "(set LINQ_PHONE_NUMBER)";
-  console.log(`Linq agent listening on http://localhost:${PORT}`);
-  console.log(`Webhook path: POST /webhook?version=2026-02-03`);
-  console.log(`Sandbox Linq number: ${number}`);
-  console.log("Inbound-first: text that number from your phone, then the agent replies.");
-  try {
-    getLinqPhoneNumber();
-  } catch {
-    console.warn("Warning: LINQ_PHONE_NUMBER is not set yet.");
-  }
+  console.log(`Italian Barber booking agent on http://localhost:${PORT}`);
+  console.log(`Webhook: POST /webhook?version=2026-02-03`);
+  console.log(`Linq number: ${number}`);
+  console.log(`Booking notify → ${BOOKING_NOTIFY_NUMBER}`);
 });
